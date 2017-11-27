@@ -1,3 +1,4 @@
+#Source: http://snap.stanford.edu/data/p2p-Gnutella08.html
 
 tmp <- tempfile()
 download.file("http://snap.stanford.edu/data/p2p-Gnutella08.txt.gz",tmp)
@@ -23,11 +24,29 @@ data.edges <- data %>%
 data_nodes <- full_join(data.edges,data.nodes,  by = "ID")
 rm(data.nodes, data.edges)
 
+data_nodes$hosts <- if_else(data_nodes$edges<10, "small",
+                            if_else(data_nodes$edges>50, "big", "medium"))
+
+
+
+#################################
+
 library(igraph)
 net_t1 <- graph_from_data_frame(d=data, vertices=data_nodes, directed=T) 
-net_t1 <- simplify(net_t1, remove.multiple = F, remove.loops = T) 
-plot(test, edge.arrow.size=.4,vertex.label=NA)
+net_t1 <- simplify(net_t1, remove.multiple = F, remove.loops = T)
 
+colrs <- c("gray10", "gray50", "gray99")
+V(net_t1)$color <- colrs[V(net_t1)$hosts]
+plot(net_t1, 
+     edge.arrow.size=.1,
+     edge.width=.4,
+     edge.arrow.width=.4,
+     vertex.label=NA,
+     vertex.size=8)
+
+
+
+#############################
 library(GGally)
 library(network)
 library(sna)
