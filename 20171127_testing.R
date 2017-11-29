@@ -1,49 +1,65 @@
 #Source: http://snap.stanford.edu/data/p2p-Gnutella08.html
 
+#Libraries
+library(dplyr)
+library(RColorBrewer)
+library(igraph)
+
+#Data Preparation
 tmp <- tempfile()
 download.file("http://snap.stanford.edu/data/p2p-Gnutella08.txt.gz",tmp)
 data <- read.csv(
         gzfile(tmp),
         sep="\t",
-        header=FALSE)
-data <- data[-(1:4),]
-names(data) <- c("nodes", "edges")
-data$nodes <- as.numeric(data$nodes)
-data$edges <- as.numeric(data$edges)
+        header=FALSE,
+        skip=4,
+        col.names = c("from", "to"))
 rm(tmp)
 
-library(dplyr)
-data.nodes <- data %>%
-        group_by(ID = nodes) %>%
-        summarise(nodes = n())
+data.nodges <- data %>%
+        group_by(ID = from) %>%
+        summarise(nr_edges = n()) %>% #Include all relevant nodges and the number of their received edges
+        mutate(connected = if_else(nr_edges<5, "small",
+                                   if_else(nr_edges>20, "big", "medium"))) #Classify the product by # of edges
 
-data.edges <- data %>%
-        group_by(ID = edges) %>%
-        summarise(edges = n())
 
-data_nodes <- full_join(data.edges,data.nodes,  by = "ID")
-rm(data.nodes, data.edges)
+data_big <- data[#data$to %in% data.nodges[data.nodges$connected=="big",]$ID &
+                     data$from %in% data.nodges[data.nodges$connected=="big",]$ID, ]
 
-data_nodes$hosts <- if_else(data_nodes$edges<10, "small",
-                            if_else(data_nodes$edges>50, "big", "medium"))
-
+data_big_ids <- data.frame(ID = as.integer(unique(c(data_big$from, data_big$to))), 
+                              stringsAsFactors=FALSE)
+data_big_ids$class <- if_else(data_big_ids$ID %in% data.nodges[data.nodges$connected=="big",]$ID,
+                              "host", "connection")
 
 
 #################################
 
-library(igraph)
-net_t1 <- graph_from_data_frame(d=data, vertices=data_nodes, directed=T) 
+
+net_t1 <- graph_from_data_frame(d=data_big, vertices=data_big_ids, directed=T) 
 net_t1 <- simplify(net_t1, remove.multiple = F, remove.loops = T)
 
-colrs <- c("gray10", "gray50", "gray99")
-V(net_t1)$color <- colrs[V(net_t1)$hosts]
+colrs <- brewer.pal(6, "Blues")[c(2,6)]
+wdt <- c(0.3,1)
+my_color <- colrs[as.numeric(as.factor(V(net_t1)$class))]
+my_width <- wdt[as.numeric(as.factor(V(net_t1)$class))]
+V(net_t1)$label <- as.character(data_big_ids$ID)
 plot(net_t1, 
      edge.arrow.size=.1,
-     edge.width=.4,
-     edge.arrow.width=.4,
-     vertex.label=NA,
-     vertex.size=8)
-
+     edge.width=my_width,
+     edge.arrow.width=my_width,
+     vertex.label=if_else(V(net_t1)$class=="host", V(net_t1)$label, ""),
+     vertex.label.font = 2,
+     vertex.label.degree = pi/2,
+     vertex.label.color = "red",
+     vertex.size=8, 
+     vertex.color=my_color,
+     title="Connections of Major Hosts in Gnutella peer-to-peer network")
+legend("bottomright",
+       title = "Nodge Type",
+       legend=levels(as.factor(V(net_t1)$class)) , 
+       col = colrs, 
+       pch=20 , pt.cex = 1.5, cex = 1, 
+       horiz = FALSE)
 
 
 #############################
@@ -68,10 +84,10 @@ tmp <- tempfile()
 download.file("http://www.kateto.net/wordpress/wp-content/uploads/2017/06/polnet2017.zip",tmp)
 links <- read_csv(unz(tmp, 
                    "Data files/Dataset1-Media-Example-EDGES.csv"))
-nodes <- read_csv(unz(tmp, 
-                      "Data files/Dataset1-Media-Example-NODES.csv"))
+nodges <- read_csv(unz(tmp, 
+                      "Data files/Dataset1-Media-Example-nodges.csv"))
 
 library(igraph)
-net_ex <- graph_from_data_frame(d=links, vertices=nodes, directed=T) 
+net_ex <- graph_from_data_frame(d=links, vertices=nodges, directed=T) 
 plot(net_ex)
 
